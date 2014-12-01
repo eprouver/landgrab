@@ -13,8 +13,10 @@ body{
 }
 
 .outterBorder{
-    stroke: rgba(255,255,255,0.5);
-    stroke-width: 10px;
+    stroke: rgba(255,255,0,0.5);
+    stroke-width: 5px;
+    stroke-dashArray: 5 5;
+    fill:transparent;
 }
 
 #iscrollHolder{
@@ -28,29 +30,45 @@ svg {
 .ship {
 
 }
+.ship .timer{
+    stroke-width: 0;
+}
+
+.ship .clickarea{
+    stroke: none !important;
+    fill: transparent !important;
+
+}
 .prod {
-    opacity: 0.3;
     pointer-events:none;
     fill: transparent;
-    stroke-width: 4px;
+    stroke-width: 1px;
+}
+.hide{
+    display:none;
 }
 .noclick {
     pointer-events:none;
 }
-.selected {
+.visualShip{
+    pointer-events:none;
+}
+
+.selected .visualShip{
     fill:black;
 }
 .territory {
     stroke-width: 0;
     stroke-linejoin: round;
-    opacity: 0.1;
+ 
 }
 .link {
     stroke-width: 1px;
-    opacity: 0.7;
+
     pointer-events:none;
     stroke-dasharray:1, 10;
 }
 .planet {
-    stroke: none;
+    stroke-width: 0;
+    stroke: transparent;
 }

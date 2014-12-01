@@ -1,131 +1,92 @@
-// var myScroll = new IScroll('#iscrollHolder', {
-// 	scrollY: true,
-// 	scrollX: true,
-// 	freeScroll: true,
-// 	zoom: true
-// });
+var timer = function(parent, recharge) {
 
-// setTimeout(function() {
-// 	myScroll.refresh();
-// }, 100);
+	var width = 100,
+		height = 100,
+		radius = Math.min(width, height) / 2;
 
-	var reqAnimationFrame = (function () {
-	    return window[Hammer.prefixed(window, 'requestAnimationFrame')] || function (callback) {
-	        window.setTimeout(callback, 1000 / 60);
-	    };
-	})();
+	var holder = parent.append("g")
+		.attr('class', 'timer')
+	    .attr("width", width)
+    .attr("height", height)
 
+	var arc = d3.svg.arc()
+		.innerRadius(45)
+		.outerRadius(50);
 
-function hammerTime(main, offX, offY, startScale){
-	if(!startScale) startScale = 1;
+	var data = [{
+		start: 0.00001,
+		end: 1,
+		color: 'limeGreen'
+	}, {
+		start: 1,
+		end: 0.00001,
+		color: 'rgba(0,0,0,0.2)'
+	}];
 
-	var el = document.getElementById('iscrollHolder');
-	var transform = {
-	        translate: { x:offX * startScale, y: offY * startScale },
-	        x: offX * startScale,
-	        y: offY * startScale,
-	        scale: startScale,
-	        angle: 0,
-	        rx: 0,
-	        ry: 0,
-	        rz: 0
-	    };
-	var timer;
-	var ticking = false;
+	var pie = d3.layout.pie()
+		.value(function(d) {
+			return d.start;
+		})
+		.sort(null);
 
-	function updateElementTransform() {
-	    // var value = [
-	    //     'translate3d(' + transform.translate.x + 'px, ' + transform.translate.y + 'px, 0)',
-	    //     'scale(' + transform.scale + ', ' + transform.scale + ')',
-	    //     'rotate3d('+ transform.rx +','+ transform.ry +','+ transform.rz +','+  transform.angle + 'deg)'
-	    // ];
+	var path = holder.datum(data).selectAll("path.timer")
+		.data(pie)
+		.enter()
+		.append("path")
+		.classed('hide', true)
+		.attr("fill", function(d, i) {
+			return d.data.color;
+		})
+		.attr("d", arc)
 
-	    // value = value.join(" ");
-	    // el.style.webkitTransform = value;
-	    // el.style.mozTransform = value;
-	    // el.style.transform = value;
-
-	    var value = [
-	        'translate(' + (transform.translate.x - (offX * transform.scale)) + ', ' + (transform.translate.y - (offY * transform.scale)) + ')',
-	        'scale(' + transform.scale + ', ' + transform.scale + ')',
-	        'rotate(' + transform.angle + ',' + offX +','+ offY + ')'
-	    ].join(" ");
-
-	    main.attr('transform', value);
-	    ticking = false;
+	function arcTween(a) {
+		var i = d3.interpolate(this._current, a);
+		this._current = i(0);
+		return function(t) {
+			return arc(i(t));
+		};
+	}
+	return {
+		holder: holder,
+		start: function() {
+			parent.classed('noclick', true)
+			path.classed('hide', false)
+				.each(function(d) {
+					this._current = d;
+				});
+			pie.value(function(d) {
+				return d.end;
+			});
+			path = path.data(pie); // compute the new angles
+			path.transition()
+				.ease('linear')
+				.duration(recharge)
+				.attrTween("d", arcTween).each("end", function() {
+					parent.classed('noclick', false)
+					pie.value(function(d) {
+						return d.start;
+					});
+					path = path.data(pie).attr("d", arc).classed('hide', true);
+				});
+		}
 	}
 
-	function requestElementUpdate() {
-	    if(!ticking) {
-	        reqAnimationFrame(updateElementTransform);
-	        ticking = true;
-	    }
-	}
-
-	function onPan(ev) {
-	    el.className = '';
-	    transform.translate = {
-	        x: transform.x + ev.deltaX,
-	        y: transform.y + ev.deltaY
-	    };
-
-	    requestElementUpdate();
-	}
-
-	var initScale = 1;
-	function onPinch(ev) {
-	    if(ev.type == 'pinchstart') {
-	        initScale = transform.scale || 1;
-	    }
-
-	    el.className = '';
-	    transform.scale = initScale * ev.scale;
-
-	    requestElementUpdate();
-	}
-
-	var initAngle = 0;
-	function onRotate(ev) {
-	    if(ev.type == 'rotatestart') {
-	        initAngle = transform.angle || 0;
-	    }
-
-	    el.className = '';
-	    transform.rz = 1;
-	    transform.angle = initAngle + ev.rotation;
-
-	    requestElementUpdate();
-	}
-
-	var mc = new Hammer.Manager(el);
-
-	mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
-
-	mc.add(new Hammer.Rotate({ threshold: 0 })).recognizeWith(mc.get('pan'));
-	mc.add(new Hammer.Pinch({ threshold: 0 })).recognizeWith([mc.get('pan'), mc.get('rotate')]);
-
-	mc.on("panstart panmove", onPan);
-	mc.on("panend", function(){
-		transform.x = transform.translate.x;
-		transform.y = transform.translate.y;
-	});
-	mc.on("rotatestart rotatemove", onRotate);
-	mc.on("pinchstart pinchmove", onPinch);
-	requestElementUpdate();
 };
-
 
 function Board() {
 	var self = this;
+	var selected = {};
+	var activePlayer = false;
 
 	this.prodmax = 30;
 	this.lifeColors = ['yellow', 'orange', 'red'];
-	this.growthSpread = 13;
+	this.growthSpread = 80;
 
 	this.dims = {
 		width: 2000,
 		height: 2000
 	}
+	this.recharge = 20000;
 
 	var x = d3.scale.linear()
 		.range([0, this.dims.width]);
@@ -133,56 +94,41 @@ function Board() {
 	var y = d3.scale.linear()
 		.range([0, this.dims.height]);
 
+	var colors = [d3.rgb('white'), d3.rgb('cyan'), d3.rgb('fuchsia')];
 	var color = function(d) {
-		return ['white', 'cyan', 'fuchsia'][d];
+		return colors[d];
 	};
 
-	//Board
-	var selected = {};
-	var activePlayer = false;
-
-	var main = d3.select('#main')
+	self.main = d3.select('#main')
 		.attr('width', this.dims.width)
 		.attr('height', this.dims.height)
 		.append("g")
 
-		main.append('rect')
-		.attr('class', 'outterBorder')
-		.attr('width', this.dims.width)
-		.attr('height', this.dims.height)
-		.on('click', function() {
-			//Find player
-			if (selected[activePlayer]) {
-				var coords = d3.mouse(this);
-				selected[activePlayer].tx = coords[0] / self.dims.width;
-				selected[activePlayer].ty = coords[1] / self.dims.height;
-				selected[activePlayer].selected = false;
-				selected[activePlayer] = false;
-			}
-		});
+	hammerTime(self.main, this.dims.width / 2, this.dims.height / 2, 0.5);
 
-		hammerTime(main, this.dims.width/2, this.dims.height/2, 0.5);
+	var territoryHolder = self.main.append("g").attr('class', 'noclick');
+	var territory = territoryHolder.selectAll("path.territory");
+	var planets;
+	var planetData = [];
+	var shipsData = [];
+	var ships, prods;
 
 	//Veronoi
-	var territoryHolder = main.append("g").attr('class', 'noclick');
-	var territory = territoryHolder.selectAll("path.territory");
-
 	var buffer = 3000;
 	var voronoi = d3.geom.voronoi()
 		.clipExtent([
 			[-buffer, -buffer],
-			[this.dims.width+ buffer, this.dims.height + buffer]
+			[this.dims.width + buffer, this.dims.height + buffer]
 		]);
 
 	//Planets
-	var planets;
-	this.addPlanet = function() {
+	self.addPlanet = function() {
 		planetData.push({
 			x: Math.random(),
 			y: Math.random()
 		});
 
-		planets = main.selectAll('.planet').data(planetData).enter()
+		planets = self.main.selectAll('.planet').data(planetData).enter()
 			.append('circle')
 			.attr('class', 'noclick')
 			.attr('cx', function(d) {
@@ -193,13 +139,9 @@ function Board() {
 			})
 			.attr('r', 3)
 	}
-	var planetData = [];
 
 	//Ships
-	var shipsData = [];
-	var ships, prods;
-
-	this.addShip = function(t, x, y, tx, ty) {
+	self.addShip = function(t, x, y, tx, ty) {
 		var ship = {
 			x: x || Math.random(),
 			y: y || Math.random(),
@@ -218,27 +160,29 @@ function Board() {
 		ship.ty = ty ? ty : ship.y;
 
 		shipsData.push(ship);
+		//d3.selectAll('.ship').remove();
+		// ships = self.main.selectAll('.ship').data(shipsData).enter().append('g').attr('class', function(d) {
+		// 	return 'ship ' + (d.selected ? 'selected' : '');
+		// });
+var d3Ship = document.createElementNS ("http://www.w3.org/2000/svg", "g");
+d3Ship.setAttributeNS(null, 'class', 'ship');
+self.main[0][0].appendChild(d3Ship);
 
-		d3.selectAll('.ship').remove();
+		d3Ship = d3.select(d3Ship).datum(ship);
 
-		ships = main.selectAll('.ship').data(shipsData).enter().append('g');
-
-		ships.append('circle').attr('r', 15)
-
-		//.attr('d', "m-15,-2l14,22l14,-22l-16,-22l-12,22z");
-
-		ships.attr('class', function(d) {
-				return 'ship ' + (d.selected ? 'selected' : '');
+		d3Ship
+			.each(function(d){
+				d.timer = timer(d3.select(this), self.recharge);
 			})
-			.attr('r', 10)
-			.attr('fill', function(d) {
-				return color(d.player);
-			})
-			.on('dblclick', function(d) {
-				self.destroyShip(this, d);
-			})
+			.append('rect')
+			.attr('class', 'clickarea')
+			.attr('width', 80)
+			.attr('height', 80)
+			.attr('x', -40)
+			.attr('y', -40)
 			.on('click', function(d) {
 				d3.event.stopPropagation();
+
 				d.selected = !d.selected;
 				if (d.selected) {
 					shipsData.filter(function(s) {
@@ -253,22 +197,29 @@ function Board() {
 					selected[d.player] = activePlayer = false;
 				}
 
-				d3.select(this).attr('class', function(d) {
+				d3.select(this.parentNode).attr('class', function(d) {
 					return 'ship ' + (d.selected ? 'selected' : '');
 				});
 			});
 
-		prods = ships.append('circle')
+		d3Ship.append('path').attr('d', "m-15,-2l14,22l14,-22l-16,-22l-12,22z")
+			.attr('class', 'visualShip')
+			.attr('fill', function(d) {
+				return color(d.player);
+			})
+
+
+		d3Ship.append('circle')
 			.attr('cx', 0)
 			.attr('cy', 0)
 			.attr('r', function(d) {
 				return (d.prod * self.growthSpread) || 0
 			})
-			.attr('class', 'prod')
+			.attr('class', 'prod');
 
 	}
 
-	this.destroyShip = function(ship, d) {
+	self.destroyShip = function(ship, d) {
 		d3.select(ship).remove();
 		shipsData.splice(shipsData.indexOf(d), 1);
 	}
@@ -281,11 +232,9 @@ function Board() {
 	var vertices = [],
 		t, ters;
 	var linkData = [];
-	var links = main.selectAll('.link').data(linkData).enter()
+	var links = self.main.selectAll('.link').data(linkData).enter()
 		.append('line')
 		.attr('class', 'link')
-
-	var movers = [].concat(shipsData);
 
 	function move(s, e, v, dt) {
 		return s + ((e - s) * (v * dt / 1000));
@@ -358,7 +307,7 @@ function Board() {
 		t.append("path")
 			.attr('class', 'territory')
 			.attr("fill", function(d, i) {
-				return vertices[i].color;
+				return vertices[i].color.darker(5);
 			})
 			.attr("stroke", function(d, i) {
 				return vertices[i].color;
@@ -400,13 +349,9 @@ function Board() {
 		})
 
 		//Draw Ships
+		ships = self.main.selectAll('.ship')
 		ships.attr('transform', function(d) {
 				return 'translate(' + x(d.x) + ',' + y(d.y) + ')'
-			})
-			.attr('class', function(d) {
-				return 'ship ' + (d.selected ? 'selected' : '');
-			}).attr('fill', function(d) {
-				return color(d.player);
 			})
 			.attr('stroke-width', function(d) {
 				return d.links;
@@ -416,7 +361,7 @@ function Board() {
 			})
 
 		//Production Circles
-		prods.attr('r', function(d) {
+		d3.select('circle.prod').attr('r', function(d) {
 				if (!d.prod || d.prod < 0 || d.links == 0) {
 					return 0;
 				}
@@ -470,25 +415,43 @@ function Board() {
 		reqAnimationFrame(self.tick);
 	}
 
+	self.main.append('rect')
+		.attr('class', 'outterBorder')
+		.attr('width', this.dims.width)
+		.attr('height', this.dims.height)
+		.on('click', function() {
+			//Find player
+			if (selected[activePlayer]) {
+				var coords = d3.mouse(this);
+				selected[activePlayer].tx = coords[0] / self.dims.width;
+				selected[activePlayer].ty = coords[1] / self.dims.height;
+				selected[activePlayer].selected = false;
+				selected[activePlayer].timer.start();
+				selected[activePlayer] = false;
+
+				d3.select('.selected').classed('selected', false);
+			}
+		});
+
 }
 
 
-/*
-var force = d3.layout.force()
-    .nodes(movers)
-    .size([this.dims.width, this.dims.height])
-    .on("tick", tick)
-    .start(); */
+function start() {
+	var board = new Board();
 
-var board = new Board();
+	for (var i = 0; i < 3; i++) {
+		board.addShip(i);
+	}
 
-for (var i = 0; i < 3; i++) {
-	board.addShip(i);
+	for (var i = 0; i < 15; i++) {
+		board.addPlanet();
+	}
+
+	var gui = new dat.GUI();
+	gui.add(board, 'addPlanet');
+	gui.add(board, 'growthSpread', 5, 500);
+
+	reqAnimationFrame(board.tick);
 }
 
-for (var i = 0; i < 15; i++) {
-	board.addPlanet();
-}
-
-
-reqAnimationFrame(board.tick);
+window.addEventListener('load', start);
