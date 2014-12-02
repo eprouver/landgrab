@@ -122,10 +122,10 @@ function Board() {
 		]);
 
 	//Planets
-	self.addPlanet = function() {
+	self.addPlanet = function(px, py, dif) {
 		planetData.push({
-			x: Math.random(),
-			y: Math.random()
+			x: px? px + (Math.random() * dif) : Math.random(),
+			y: py? py + (Math.random() * dif) : Math.random()
 		});
 
 		planets = self.main.selectAll('.planet').data(planetData).enter()
@@ -180,9 +180,6 @@ self.main[0][0].appendChild(d3Ship);
 			.attr('height', 80)
 			.attr('x', -40)
 			.attr('y', -40)
-			.on('dblclick', function(d){
-				self.destroyShip(this, d);
-			})
 			.on('click', function(d) {
 				d3.event.stopPropagation();
 
@@ -212,6 +209,7 @@ self.main[0][0].appendChild(d3Ship);
 			})
 
 			ship.d3Ship = d3Ship;
+			return ship;
 
 	}
 
@@ -450,14 +448,20 @@ self.main[0][0].appendChild(d3Ship);
 
 function start() {
 	var board = new Board();
-
+	var ship;
 	for (var i = 0; i < 3; i++) {
-		board.addShip(i);
+		ship = board.addShip(i);
+		board.addShip(i, ship.x + Math.random() * 0.05, ship.y + Math.random() * 0.05);
 	}
 
-	for (var i = 0; i < 15; i++) {
-		board.addPlanet();
+	for(var j = 0; j < 10; j++){
+		var x = Math.random();
+		var y = Math.random();
+	for (var i = 0; i < 5; i++) {
+		board.addPlanet(x, y, 0.09);
+	}		
 	}
+
 
 	var gui = new dat.GUI();
 	gui.add(board, 'addPlanet');
