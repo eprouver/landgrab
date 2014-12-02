@@ -1,4 +1,4 @@
-var timer = function(parent, recharge) {
+var timer = function(parent, recharge, color) {
 
 	var width = 100,
 		height = 100,
@@ -16,7 +16,7 @@ var timer = function(parent, recharge) {
 	var data = [{
 		start: 0.00001,
 		end: 1,
-		color: 'limeGreen'
+		color: color
 	}, {
 		start: 1,
 		end: 0.00001,
@@ -172,7 +172,7 @@ self.main[0][0].appendChild(d3Ship);
 
 		d3Ship
 			.each(function(d){
-				d.timer = timer(d3.select(this), self.recharge);
+				d.timer = timer(d3.select(this), self.recharge, color(ship.player));
 			})
 			.append('rect')
 			.attr('class', 'clickarea')
@@ -180,6 +180,9 @@ self.main[0][0].appendChild(d3Ship);
 			.attr('height', 80)
 			.attr('x', -40)
 			.attr('y', -40)
+			.on('dblclick', function(d){
+				self.destroyShip(this, d);
+			})
 			.on('click', function(d) {
 				d3.event.stopPropagation();
 
@@ -208,22 +211,29 @@ self.main[0][0].appendChild(d3Ship);
 				return color(d.player);
 			})
 
-
-		d3Ship.append('circle')
-			.attr('cx', 0)
-			.attr('cy', 0)
-			.attr('r', function(d) {
-				return (d.prod * self.growthSpread) || 0
-			})
-			.attr('class', 'prod');
+			ship.d3Ship = d3Ship;
 
 	}
 
 	self.destroyShip = function(ship, d) {
-		d3.select(ship).remove();
+		d3.select(ship.parentNode).select('.visualShip')
+			.attr('class','destroyed')
+			.attr('opacity', 1)
+			.attr('stroke', color(d.player))
+			.attr('stroke-width', 0)
+			.attr('stroke-dasharray', '5 5')
+			.attr('stroke-dashoffset', 0)
+			.attr('stroke-linejoin', 'round')
+			.transition()
+			.ease('linear')
+			.duration(800)
+			.attr('stroke-width', 10000)
+			.attr('stroke-dasharray', '1 30')
+			.attr('stroke-dashoffset', 0).each('end', function() {
+				d3.select(ship.parentNode).remove();
+			})
 		shipsData.splice(shipsData.indexOf(d), 1);
 	}
-
 	//Updates
 	var lifeColor = d3.scale.linear()
 		.domain([0, 1])
@@ -261,7 +271,19 @@ self.main[0][0].appendChild(d3Ship);
 		var dt = e - lastE;
 
 		//Update Ship Data
-		shipsData.forEach(function(d) {
+		shipsData.forEach(function(d, i) {
+
+			shipsData.slice(i+1).forEach(function(s){
+				if(s.player === d.player){
+					return;
+				}
+				if(Math.sqrt( Math.pow(s.x - d.x, 2) + Math.pow(s.y - d.y, 2)  ) < 0.05){
+					self.destroyShip(d.d3Ship.select('rect')[0][0], d);
+					self.destroyShip(s.d3Ship.select('rect')[0][0], s);
+
+				}
+			})
+
 			if (d.tx && d.ty) {
 				if (Math.abs(d.x - d.tx) > rounddif || Math.abs(d.y - d.ty) > rounddif) {
 					if (d.v < d.mv) {
@@ -360,16 +382,6 @@ self.main[0][0].appendChild(d3Ship);
 				return lifeColor(((d.prod / (self.prodmax / self.lifeColors.length)) % self.lifeColors.length));
 			})
 
-		//Production Circles
-		d3.select('circle.prod').attr('r', function(d) {
-				if (!d.prod || d.prod < 0 || d.links == 0) {
-					return 0;
-				}
-				return (((self.lifeColors.length * d.prod) / (self.prodmax / self.lifeColors.length)) % self.lifeColors.length) * self.growthSpread;
-			})
-			.attr('stroke', function(d) {
-				return lifeColor(((d.prod / (self.prodmax / self.lifeColors.length)) % self.lifeColors.length));
-			})
 
 		lastE = e;
 
