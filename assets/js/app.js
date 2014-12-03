@@ -6,8 +6,8 @@ var timer = function(parent, recharge, color) {
 
 	var holder = parent.append("g")
 		.attr('class', 'timer')
-	    .attr("width", width)
-    .attr("height", height)
+		.attr("width", width)
+		.attr("height", height)
 
 	var arc = d3.svg.arc()
 		.innerRadius(45)
@@ -67,6 +67,7 @@ var timer = function(parent, recharge, color) {
 						return d.start;
 					});
 					path = path.data(pie).attr("d", arc).classed('hide', true);
+					parent.data()[0].moving = false;
 				});
 		}
 	}
@@ -77,6 +78,7 @@ function Board() {
 	var self = this;
 	var selected = {};
 	var activePlayer = false;
+	var teams = [];
 
 	this.prodmax = 30;
 	this.lifeColors = ['yellow', 'orange', 'red'];
@@ -94,7 +96,7 @@ function Board() {
 	var y = d3.scale.linear()
 		.range([0, this.dims.height]);
 
-	var colors = [d3.rgb('white'), d3.rgb('cyan'), d3.rgb('fuchsia')];
+	var colors = ['#0074D9', '#2ECC40', '#B10DC9', '#FFFFFF', '#3D9970', '#39CCCC', '#85144B'].map(function(c){ return d3.rgb(c); });
 	var color = function(d) {
 		return colors[d];
 	};
@@ -124,8 +126,8 @@ function Board() {
 	//Planets
 	self.addPlanet = function(px, py, dif) {
 		planetData.push({
-			x: px? px + (Math.random() * dif) : Math.random(),
-			y: py? py + (Math.random() * dif) : Math.random()
+			x: px ? px + (Math.random() * dif) : Math.random(),
+			y: py ? py + (Math.random() * dif) : Math.random()
 		});
 
 		planets = self.main.selectAll('.planet').data(planetData).enter()
@@ -156,6 +158,12 @@ function Board() {
 			player: t === undefined ? ~~(Math.random() * 3) : t
 		}
 
+		if (teams[t] === undefined && t !== 0) {
+			teams[t] = {
+				color: color(t)
+			};
+		}
+
 		ship.tx = tx ? tx : ship.x;
 		ship.ty = ty ? ty : ship.y;
 
@@ -164,14 +172,14 @@ function Board() {
 		// ships = self.main.selectAll('.ship').data(shipsData).enter().append('g').attr('class', function(d) {
 		// 	return 'ship ' + (d.selected ? 'selected' : '');
 		// });
-var d3Ship = document.createElementNS ("http://www.w3.org/2000/svg", "g");
-d3Ship.setAttributeNS(null, 'class', 'ship');
-self.main[0][0].appendChild(d3Ship);
+		var d3Ship = document.createElementNS("http://www.w3.org/2000/svg", "g");
+		d3Ship.setAttributeNS(null, 'class', 'ship');
+		self.main[0][0].appendChild(d3Ship);
 
 		d3Ship = d3.select(d3Ship).datum(ship);
 
 		d3Ship
-			.each(function(d){
+			.each(function(d) {
 				d.timer = timer(d3.select(this), self.recharge, color(ship.player));
 			})
 			.append('rect')
@@ -208,31 +216,31 @@ self.main[0][0].appendChild(d3Ship);
 				return color(d.player);
 			})
 
-			ship.d3Ship = d3Ship;
-			return ship;
+		ship.d3Ship = d3Ship;
+		return ship;
 
 	}
 
 	self.destroyShip = function(ship, d) {
-		d3.select(ship.parentNode).select('.visualShip')
-			.attr('class','destroyed')
-			.attr('opacity', 1)
-			.attr('stroke', color(d.player))
-			.attr('stroke-width', 0)
-			.attr('stroke-dasharray', '5 5')
-			.attr('stroke-dashoffset', 0)
-			.attr('stroke-linejoin', 'round')
-			.transition()
-			.ease('linear')
-			.duration(800)
-			.attr('stroke-width', 10000)
-			.attr('stroke-dasharray', '1 30')
-			.attr('stroke-dashoffset', 0).each('end', function() {
-				d3.select(ship.parentNode).remove();
-			})
-		shipsData.splice(shipsData.indexOf(d), 1);
-	}
-	//Updates
+			d3.select(ship.parentNode).select('.visualShip')
+				.attr('class', 'destroyed')
+				.attr('opacity', 1)
+				.attr('stroke', color(d.player))
+				.attr('stroke-width', 0)
+				.attr('stroke-dasharray', '5 5')
+				.attr('stroke-dashoffset', 0)
+				.attr('stroke-linejoin', 'round')
+				.transition()
+				.ease('linear')
+				.duration(800)
+				.attr('stroke-width', 10000)
+				.attr('stroke-dasharray', '1 30')
+				.attr('stroke-dashoffset', 0).each('end', function() {
+					d3.select(ship.parentNode).remove();
+				})
+			shipsData.splice(shipsData.indexOf(d), 1);
+		}
+		//Updates
 	var lifeColor = d3.scale.linear()
 		.domain([0, 1])
 		.range(self.lifeColors);
@@ -271,11 +279,11 @@ self.main[0][0].appendChild(d3Ship);
 		//Update Ship Data
 		shipsData.forEach(function(d, i) {
 
-			shipsData.slice(i+1).forEach(function(s){
-				if(s.player === d.player){
+			shipsData.slice(i + 1).forEach(function(s) {
+				if (s.player === d.player) {
 					return;
 				}
-				if(Math.sqrt( Math.pow(s.x - d.x, 2) + Math.pow(s.y - d.y, 2)  ) < 0.05){
+				if (Math.sqrt(Math.pow(s.x - d.x, 2) + Math.pow(s.y - d.y, 2)) < 0.05) {
 					self.destroyShip(d.d3Ship.select('rect')[0][0], d);
 					self.destroyShip(s.d3Ship.select('rect')[0][0], s);
 
@@ -335,10 +343,13 @@ self.main[0][0].appendChild(d3Ship);
 			.attr("d", polygon);
 		//}
 
+		var appShips = shipsData.map(function(s) {
+			return [~~(x(s.x)), ~~(y(s.y))]
+		})
 
 		//Update Planet Ownership
 		planetData.forEach(function(planet) {
-			var xs, ys;
+			var xs, ys, score = [];
 			for (var i = 0; i < ters.length; i++) {
 				var xs = ters[i].__data__.map(function(x) {
 					return x[0]
@@ -348,9 +359,7 @@ self.main[0][0].appendChild(d3Ship);
 				});
 
 				if (pnpoly(ters[i].__data__.length, xs, ys, x(planet.x), y(planet.y))) {
-					var appShips = shipsData.map(function(s) {
-						return [~~(x(s.x)), ~~(y(s.y))]
-					})
+
 					var app = ters[i].__data__.point.map(Math.floor);
 
 					for (var s = 0; s < appShips.length; s++) {
@@ -365,8 +374,98 @@ self.main[0][0].appendChild(d3Ship);
 
 				}
 			}
+		});
 
-		})
+
+		var currentScore = 0,
+			points, ships, others;
+
+		function rnd(mean, stdev) {
+			function rnd_snd() {
+				return (Math.random() * 2 - 1) + (Math.random() * 2 - 1) + (Math.random() * 2 - 1);
+			}
+
+			return Math.round(rnd_snd() * stdev + mean);
+		}
+
+
+		for (var team in teams) {
+			team = parseInt(team);
+
+			ships = shipsData.filter(function(s) {
+				return (s.player == team) && !s.moving
+			});
+			if (ships.length === 0) continue;
+
+			others = shipsData.filter(function(s) {
+				return (s.player != team) || s.moving
+			});
+			vertices = ships.map(function(v, oPoint) {
+				// if (Math.random() > 0.2) {
+				// 	oPoint = [rnd(v.x, 0.3), rnd(v.y, 0.3)].map(function(v) {
+				// 		return Math.min(Math.max(v, 0), 1);
+				// 	});
+				// } else {
+					oPoint = [Math.random(), Math.random()];
+				// }
+
+				return {
+					point: [x(oPoint[0]), y(oPoint[1])],
+					oPoint: oPoint
+				}
+			}).concat(others.map(function(v) {
+				return {
+					point: [x(v.x), y(v.y)]
+				}
+			}));
+
+			t = territory.data(voronoi(vertices.map(function(v) {
+				return v.point
+			}))).enter();
+			ters = t[0].filter(function(v) {
+				return v.__data__
+			});
+
+			if (ters.length == shipsData.length) {
+				points = 0;
+				currentScore = shipsData.filter(function(v) {
+					return v.player == team
+				}).reduce(function(i, a) {
+					return i + a.links
+				}, 0);
+
+				planetData.forEach(function(planet) {
+					for (var i = 0; i < ters.length; i++) {
+						var xs = ters[i].__data__.map(function(x) {
+							return x[0]
+						});
+						var ys = ters[i].__data__.map(function(y) {
+							return y[1]
+						});
+
+						if (pnpoly(ters[i].__data__.length, xs, ys, x(planet.x), y(planet.y))) {
+							if(shipsData[i].player === team){
+								points++;
+							}
+							
+							return;
+
+						}
+					}
+				});
+
+				if (points > currentScore) {
+					ships.forEach(function(v, i) {
+						v.tx = vertices[i].oPoint[0];
+						v.ty = vertices[i].oPoint[1];
+						v.timer.start();
+						v.moving = true;
+					});
+				}
+			}
+
+
+		}
 
 		//Draw Ships
 		ships = self.main.selectAll('.ship')
@@ -427,8 +526,8 @@ self.main[0][0].appendChild(d3Ship);
 
 	self.main.append('rect')
 		.attr('class', 'outterBorder')
-		.attr('width', this.dims.width)
-		.attr('height', this.dims.height)
+		.attr('width', this.dims.width * 1.1)
+		.attr('height', this.dims.height * 1.1)
 		.on('click', function() {
 			//Find player
 			if (selected[activePlayer]) {
@@ -437,12 +536,12 @@ self.main[0][0].appendChild(d3Ship);
 				selected[activePlayer].ty = coords[1] / self.dims.height;
 				selected[activePlayer].selected = false;
 				selected[activePlayer].timer.start();
+				selected[activePlayer].moving = true;
 				selected[activePlayer] = false;
 
 				d3.select('.selected').classed('selected', false);
 			}
 		});
-
 }
 
 
@@ -454,12 +553,12 @@ function start() {
 		board.addShip(i, ship.x + Math.random() * 0.05, ship.y + Math.random() * 0.05);
 	}
 
-	for(var j = 0; j < 10; j++){
+	for (var j = 0; j < 10; j++) {
 		var x = Math.random();
 		var y = Math.random();
-	for (var i = 0; i < 5; i++) {
-		board.addPlanet(x, y, 0.09);
-	}		
+		for (var i = 0; i < 5; i++) {
+			board.addPlanet(x, y, 0.09);
+		}
 	}
 
 
