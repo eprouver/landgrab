@@ -79,6 +79,7 @@ function Board() {
 	var selected = {};
 	var activePlayer = false;
 	var teams = [];
+	var myPlayer = 0;
 
 	this.prodmax = 30;
 	this.lifeColors = ['yellow', 'orange', 'red'];
@@ -96,7 +97,13 @@ function Board() {
 	var y = d3.scale.linear()
 		.range([0, this.dims.height]);
 
-	var colors = ['#0074D9', '#2ECC40', '#B10DC9', '#FFFFFF', '#3D9970', '#39CCCC', '#85144B'].map(function(c){ return d3.rgb(c); });
+	var path = '/sounds/';
+	var sounds = ['acknowledge.wav', 'explosion.wav', 'get.wav', 'lose.wav', 'order.wav', 'select.wav'].map(function(v){
+		return new Howl({ urls: [path + v]});
+	});
+	sounds[1].volume(0.2);
+
+	var colors = ['#0074D9', '#2ECC40', '#B10DC9', '#FFFFFF', '#3D9970', '#39CCCC', '#85144B', '#001F3F', '#F012BE'].map(function(c){ return d3.rgb(c); });
 	var color = function(d) {
 		return colors[d];
 	};
@@ -143,10 +150,8 @@ function Board() {
 	}
 
 	//Ships
-	self.addShip = function(t, x, y, tx, ty) {
+	self.addShip = function(t, mx, my, tx, ty) {
 		var ship = {
-			x: x || Math.random(),
-			y: y || Math.random(),
 			v: 0,
 			a: 0.0000005,
 			mv: 0.1,
@@ -158,14 +163,17 @@ function Board() {
 			player: t === undefined ? ~~(Math.random() * 3) : t
 		}
 
-		if (teams[t] === undefined && t !== 0) {
+		if (teams[t] === undefined && t !== myPlayer
+			) {
 			teams[t] = {
 				color: color(t)
 			};
 		}
 
-		ship.tx = tx ? tx : ship.x;
-		ship.ty = ty ? ty : ship.y;
+		ship.x = mx !== undefined ? mx : Math.random();
+		ship.y = my !== undefined ? my : Math.random();
+		ship.tx = tx !== undefined ? tx : ship.x;
+		ship.ty = ty !== undefined ? ty : ship.y;
 
 		shipsData.push(ship);
 		//d3.selectAll('.ship').remove();
@@ -188,27 +196,30 @@ function Board() {
 			.attr('height', 80)
 			.attr('x', -40)
 			.attr('y', -40)
-			.on('click', function(d) {
-				d3.event.stopPropagation();
 
-				d.selected = !d.selected;
-				if (d.selected) {
-					shipsData.filter(function(s) {
-						return s.player === d.player;
-					}).forEach(function(v) {
-						v.selected = false;
-					})
-					d.selected = true;
-					selected[d.player] = d
-					activePlayer = d.player;
-				} else {
-					selected[d.player] = activePlayer = false;
-				}
+			if(t === myPlayer){
+				d3Ship.on('click', function(d) {
+					d3.event.stopPropagation();
 
-				d3.select(this.parentNode).attr('class', function(d) {
-					return 'ship ' + (d.selected ? 'selected' : '');
+					d.selected = !d.selected;
+					if (d.selected) {
+						sounds[5].play();
+						shipsData.filter(function(s) {
+							return s.player === d.player;
+						}).forEach(function(v) {
+							v.selected = false;
+						})
+						d.selected = true;
+						selected[d.player] = d
+					} else {
+						selected[d.player] = false;
+					}
+
+					d3.select(this).attr('class', function(d) {
+						return 'ship ' + (d.selected ? 'selected' : '');
+					});
 				});
-			});
+			}
 
 		d3Ship.append('path').attr('d', "m-15,-2l14,22l14,-22l-16,-22l-12,22z")
 			.attr('class', 'visualShip')
@@ -239,6 +250,7 @@ function Board() {
 					d3.select(ship.parentNode).remove();
 				})
 			shipsData.splice(shipsData.indexOf(d), 1);
+			sounds[1].play();
 		}
 		//Updates
 	var lifeColor = d3.scale.linear()
@@ -258,6 +270,14 @@ function Board() {
 
 	var lastE = 0
 	var rounddif = 0.001;
+
+			function rnd(mean, stdev) {
+			function rnd_snd() {
+				return (Math.random() * 2 - 1) + (Math.random() * 2 - 1) + (Math.random() * 2 - 1);
+			}
+
+			return Math.round(rnd_snd() * stdev + mean);
+		}
 
 	function polygon(d) {
 		return "M" + d.join("L") + "Z";
@@ -364,9 +384,20 @@ function Board() {
 
 					for (var s = 0; s < appShips.length; s++) {
 						if (appShips[s][1] === app[1] && appShips[s][0] === app[0]) {
+							
+							if(planet.owner != shipsData[s].player){
+								if(shipsData[s].player === myPlayer && planet.owner !== myPlayer){
+									sounds[2].play();
+								}else if(planet.owner === myPlayer && shipsData[s] !== myPlayer){
+									sounds[3].play();
+								}								
+							}
+
 							shipsData[s].links++;
 							planet.owner = shipsData[s].player;
 							planet.close = shipsData[s];
+
+
 							break;
 						}
 					}
@@ -380,15 +411,7 @@ function Board() {
 		var currentScore = 0,
 			points, ships, others;
 
-		function rnd(mean, stdev) {
-			function rnd_snd() {
-				return (Math.random() * 2 - 1) + (Math.random() * 2 - 1) + (Math.random() * 2 - 1);
-			}
-
-			return Math.round(rnd_snd() * stdev + mean);
-		}
-
-
+		//Stupid AI
 		for (var team in teams) {
 			team = parseInt(team);
 
@@ -401,13 +424,13 @@ function Board() {
 				return (s.player != team) || s.moving
 			});
 			vertices = ships.map(function(v, oPoint) {
-				// if (Math.random() > 0.2) {
-				// 	oPoint = [rnd(v.x, 0.3), rnd(v.y, 0.3)].map(function(v) {
-				// 		return Math.min(Math.max(v, 0), 1);
-				// 	});
-				// } else {
+				if (Math.random() > 0.2 || v.links === 0) {
+					oPoint = [rnd(v.x, 0.1), rnd(v.y, 0.1)].map(function(v) {
+						return Math.min(Math.max(v, 0), 1);
+					});
+				} else {
 					oPoint = [Math.random(), Math.random()];
-				// }
+				 }
 
 				return {
 					point: [x(oPoint[0]), y(oPoint[1])],
@@ -418,6 +441,7 @@ function Board() {
 					point: [x(v.x), y(v.y)]
 				}
 			}));
+
 
 			t = territory.data(voronoi(vertices.map(function(v) {
 				return v.point
@@ -460,6 +484,7 @@ function Board() {
 						v.ty = vertices[i].oPoint[1];
 						v.timer.start();
 						v.moving = true;
+						sounds[4].play();
 					});
 				}
 			}
@@ -530,14 +555,14 @@ function Board() {
 		.attr('height', this.dims.height * 1.1)
 		.on('click', function() {
 			//Find player
-			if (selected[activePlayer]) {
+			if (selected[myPlayer]) {
 				var coords = d3.mouse(this);
-				selected[activePlayer].tx = coords[0] / self.dims.width;
-				selected[activePlayer].ty = coords[1] / self.dims.height;
-				selected[activePlayer].selected = false;
-				selected[activePlayer].timer.start();
-				selected[activePlayer].moving = true;
-				selected[activePlayer] = false;
+				selected[myPlayer].tx = coords[0] / self.dims.width;
+				selected[myPlayer].ty = coords[1] / self.dims.height;
+				selected[myPlayer].selected = false;
+				selected[myPlayer].timer.start();
+				selected[myPlayer].moving = true;
+				selected[myPlayer] = false;
 
 				d3.select('.selected').classed('selected', false);
 			}
@@ -548,9 +573,9 @@ function Board() {
 function start() {
 	var board = new Board();
 	var ship;
-	for (var i = 0; i < 3; i++) {
-		ship = board.addShip(i);
-		board.addShip(i, ship.x + Math.random() * 0.05, ship.y + Math.random() * 0.05);
+	for (var i = 0; i < 9; i++) {
+		ship = board.addShip(i, 0.15 + (i % 3) * 0.4,0.25 + ~~(((i+1) / 10) * 3)/ 3);
+		board.addShip(i, ship.x + 0.015, ship.y + 0.015);
 	}
 
 	for (var j = 0; j < 10; j++) {
